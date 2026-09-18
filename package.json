@@ -1,0 +1,27 @@
+{
+  "name": "drawing",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "cap:init": "npx cap init \"Mewarnai Ceria\" \"com.ceria.mewarnai\" --web-dir dist",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npx cap open android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "canvas-confetti": "^1.9.4",
+    "lucide": "^1.47.0"
+  }
+}

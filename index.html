@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mewarnai Ceria - Aplikasi Mewarnai untuk Anak</title>
+  <meta name="description" content="Aplikasi mewarnai ceria untuk anak-anak dengan 300 pilihan gambar, multi-profil, ember cat ajaib, kuas pelangi, dan penilaian bintang otomatis.">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#FF5E7E">
+  <link rel="stylesheet" href="./src/styles/main.css">
+</head>
+<body>
+  <!-- Background Decorations -->
+  <div class="bg-decorations">
+    <div class="bubble bubble-1"></div>
+    <div class="bubble bubble-2"></div>
+    <div class="bubble bubble-3"></div>
+  </div>
+
+  <div id="app">
+    <!-- Main Header -->
+    <header class="app-header">
+      <div class="app-brand" id="brandBtn">
+        <span class="brand-icon">🎨</span>
+        <h1 class="brand-title">Mewarnai Ceria</h1>
+      </div>
+
+      <div class="header-actions">
+        <!-- Active Child Profile Pill -->
+        <div class="kid-profile-capsule" id="activeKidCapsule" title="Klik untuk ganti profil anak">
+          <div class="kid-avatar-mini" id="headerAvatar">🦁</div>
+          <div class="kid-info-mini">
+            <span class="kid-name-mini" id="headerKidName">Kakak</span>
+            <span class="kid-stars-mini"><span id="headerStars">15</span> ⭐</span>
+          </div>
+        </div>
+
+        <!-- Gallery Button -->
+        <button class="btn-cute btn-circle" id="galleryNavBtn" title="Galeri Karya Anak">
+          🖼️
+        </button>
+
+        <!-- Sound Mute Toggle -->
+        <button class="btn-cute btn-circle" id="soundToggleBtn" title="Atur Suara">
+          🔊
+        </button>
+      </div>
+    </header>
+
+    <!-- SCREEN 1: PROFILE SELECTOR & SETUP -->
+    <main id="profileScreen" class="view-screen">
+      <div class="profile-selection-hero">
+        <h2 class="hero-title">Siapa yang Mau Mewarnai? ✨</h2>
+        <p class="hero-subtitle">Pilih profilmu untuk menyimpan karya dan mengumpulkan bintang!</p>
+      </div>
+
+      <div class="profile-cards-grid" id="profileCardsContainer">
+        <!-- Injected via JavaScript -->
+      </div>
+    </main>
+
+    <!-- SCREEN 2: 300 DRAWINGS CATALOG -->
+    <main id="catalogScreen" class="view-screen hidden">
+      <div class="catalog-toolbar">
+        <!-- Categories Chips -->
+        <div class="category-chips-scroll" id="categoryChips">
+          <!-- Injected via JavaScript -->
+        </div>
+
+        <!-- Search Bar -->
+        <div class="catalog-search-bar">
+          <input 
+            type="text" 
+            id="searchInput" 
+            class="search-input-box" 
+            placeholder="🔍 Cari gambar kesukaanmu (misal: singa, mobil, dino, roket)..."
+          />
+        </div>
+      </div>
+
+      <!-- Catalog Grid -->
+      <div class="catalog-grid" id="catalogGrid">
+        <!-- Injected via JavaScript -->
+      </div>
+    </main>
+
+    <!-- SCREEN 3: COLORING STUDIO -->
+    <main id="studioScreen" class="view-screen hidden">
+      <!-- Studio Top Navigation -->
+      <div class="studio-topbar">
+        <button class="btn-cute btn-secondary" id="backToCatalogBtn">
+          ⬅️ Pilih Gambar Lain
+        </button>
+
+        <h3 id="currentDrawingTitle" style="font-family: var(--font-display); font-size: 1.4rem; color: var(--text-dark);">
+          Singa Rimba Ceria
+        </h3>
+
+        <div class="action-buttons-cluster">
+          <button class="btn-cute btn-circle" id="undoBtn" title="Kembalikan (Undo)">
+            ↩️
+          </button>
+          <button class="btn-cute btn-circle" id="redoBtn" title="Maju (Redo)">
+            ↪️
+          </button>
+          <button class="btn-cute btn-circle" id="clearBtn" title="Bersihkan Kanvas">
+            🗑️
+          </button>
+          <button class="btn-cute btn-success" id="saveAndGradeBtn">
+            ⭐ Selesai & Nilai!
+          </button>
+        </div>
+      </div>
+
+      <!-- Studio Work Area -->
+      <div class="studio-layout">
+        <!-- Left Tools Panel -->
+        <aside class="studio-tools-panel">
+          <div class="tool-group">
+            <button class="tool-btn active" data-tool="bucket" id="toolBucket">
+              <span class="tool-icon">🪣</span>
+              <span class="tool-text">Ember Cat</span>
+            </button>
+            <button class="tool-btn" data-tool="brush" id="toolBrush">
+              <span class="tool-icon">🖍️</span>
+              <span class="tool-text">Krayon</span>
+            </button>
+            <button class="tool-btn" data-tool="rainbow" id="toolRainbow">
+              <span class="tool-icon">🌈</span>
+              <span class="tool-text">Pelangi</span>
+            </button>
+            <button class="tool-btn" data-tool="eraser" id="toolEraser">
+              <span class="tool-icon">🧽</span>
+              <span class="tool-text">Penghapus</span>
+            </button>
+          </div>
+
+          <!-- Brush Size Selector -->
+          <div class="palette-title" style="font-size: 0.8rem; margin-top: 6px;">Ukuran Kuas</div>
+          <div class="brush-sizes">
+            <button class="brush-size-btn" data-size="8" title="Kecil">
+              <div class="brush-size-dot" style="width: 8px; height: 8px;"></div>
+            </button>
+            <button class="brush-size-btn active" data-size="16" title="Sedang">
+              <div class="brush-size-dot" style="width: 14px; height: 14px;"></div>
+            </button>
+            <button class="brush-size-btn" data-size="28" title="Besar">
+              <div class="brush-size-dot" style="width: 20px; height: 20px;"></div>
+            </button>
+          </div>
+        </aside>
+
+        <!-- Center Canvas -->
+        <section class="studio-canvas-container">
+          <div class="canvas-viewport" id="canvasViewport">
+            <canvas id="paintCanvas"></canvas>
+          </div>
+        </section>
+
+        <!-- Right Palette Panel -->
+        <aside class="studio-palette-panel">
+          <h4 class="palette-title">Pilih Warna 🎨</h4>
+          <div class="palette-grid" id="paletteGrid">
+            <!-- Swatches injected via JS -->
+          </div>
+
+          <div style="margin-top: 10px; text-align: center;">
+            <label for="customColorPicker" style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              <span>Warna Ajaib:</span>
+              <input type="color" id="customColorPicker" value="#FF5E7E" style="border: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; background: transparent;">
+            </label>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- SCREEN 4: KID'S PERSONAL GALLERY -->
+    <main id="galleryScreen" class="view-screen hidden">
+      <div class="gallery-hero">
+        <div>
+          <h2 class="hero-title" id="galleryTitle">Galeri Karya Kakak 🌟</h2>
+          <p class="hero-subtitle">Koleksi lukisan indah dan bintang yang berhasil dikumpulkan!</p>
+        </div>
+        <button class="btn-cute btn-primary" id="galleryBackCatalogBtn">
+          🎨 Mulai Mewarnai Lagi
+        </button>
+      </div>
+
+      <div class="gallery-grid" id="galleryGrid">
+        <!-- Artwork cards injected via JS -->
+      </div>
+    </main>
+
+    <!-- MODAL: EVALUATION & STAR APPRECIATION -->
+    <div id="evalModal" class="modal-overlay hidden">
+      <div class="eval-modal-card">
+        <div class="eval-badge-icon" id="evalBadgeIcon">🏆</div>
+        <h3 class="eval-title" id="evalTitle">Karya Luar Biasa!</h3>
+        
+        <div class="stars-rating-container" id="evalStarsContainer">
+          ⭐⭐⭐⭐⭐
+        </div>
+
+        <div>
+          <span class="eval-badge-title" id="evalBadgeName">Master Pelukis Cilik</span>
+        </div>
+
+        <p class="eval-praise-text" id="evalPraiseText">
+          Wah, hebat sekali! Pilihan warna yang kamu buat sangat ceria dan hidup. Kamu adalah artis cilik berbakat!
+        </p>
+
+        <div class="eval-preview-wrap">
+          <img id="evalPreviewImg" alt="Pratinjau Karya">
+        </div>
+
+        <div class="eval-actions">
+          <button class="btn-cute btn-success" id="downloadJpgBtn" style="font-size: 1.1rem; padding: 14px 24px;">
+            📥 Download JPG (Berbingkai Cantik)
+          </button>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn-cute btn-secondary" id="evalViewGalleryBtn" style="flex: 1;">
+              🖼️ Lihat Galeri
+            </button>
+            <button class="btn-cute btn-primary" id="evalNewDrawingBtn" style="flex: 1;">
+              🎨 Gambar Baru
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: EDIT CHILD PROFILE -->
+    <div id="editProfileModal" class="modal-overlay hidden">
+      <div class="eval-modal-card" style="max-width: 440px; text-align: left;">
+        <h3 class="eval-title" style="text-align: center; margin-bottom: 20px;">Atur Profil Anak 👦👧</h3>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="font-weight: 700; display: block; margin-bottom: 6px;">Nama Panggilan:</label>
+          <input type="text" id="editNameInput" class="search-input-box" style="width: 100%;" placeholder="Misal: Kakak">
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="font-weight: 700; display: block; margin-bottom: 6px;">Usia (Tahun):</label>
+          <input type="number" id="editAgeInput" class="search-input-box" style="width: 100%;" min="1" max="15" value="5">
+        </div>
+
+        <div style="margin-bottom: 24px;">
+          <label style="font-weight: 700; display: block; margin-bottom: 8px;">Pilih Karakter Favorit:</label>
+          <div id="avatarPickerGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+            <!-- Avatars injected via JS -->
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-cute btn-secondary" id="cancelEditProfileBtn" style="flex: 1;">Batal</button>
+          <button class="btn-cute btn-primary" id="saveEditProfileBtn" style="flex: 1;">Simpan Profil</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

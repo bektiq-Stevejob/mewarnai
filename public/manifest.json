@@ -1,0 +1,18 @@
+{
+  "name": "Mewarnai Ceria - Aplikasi Gambar Anak",
+  "short_name": "Mewarnai Ceria",
+  "description": "Aplikasi mewarnai ceria untuk anak-anak dengan 300 gambar, multi-profil, dan apresiasi bintang",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#FFF8EE",
+  "theme_color": "#FF5E7E",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
