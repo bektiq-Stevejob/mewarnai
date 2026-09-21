@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import '../services/evaluation_service.dart';
+import '../services/export_service.dart';
 
 class EvaluationDialog extends StatefulWidget {
   final ArtworkEvaluation evaluation;
   final String childName;
+  final String drawingTitle;
+  final String savedImagePath;
   final VoidCallback onViewGallery;
   final VoidCallback onNewDrawing;
 
@@ -12,6 +15,8 @@ class EvaluationDialog extends StatefulWidget {
     super.key,
     required this.evaluation,
     required this.childName,
+    required this.drawingTitle,
+    required this.savedImagePath,
     required this.onViewGallery,
     required this.onNewDrawing,
   });
@@ -51,9 +56,9 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
               children: [
                 Text(
                   widget.evaluation.icon,
-                  style: const TextStyle(fontSize: 64),
+                  style: const TextStyle(fontSize: 60),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   'Karya Luar Biasa, ${widget.childName}!',
                   textAlign: TextAlign.center,
@@ -63,20 +68,20 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                     color: Color(0xFFFF5E7E),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
                     widget.evaluation.stars,
                     (index) => const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 2.0),
-                      child: Text('⭐', style: TextStyle(fontSize: 32)),
+                      child: Text('⭐', style: TextStyle(fontSize: 30)),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFFE169), Color(0xFFFF923C)],
@@ -87,12 +92,12 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                     widget.evaluation.badge,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 13,
                       color: Color(0xFF432800),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -104,13 +109,61 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                     widget.evaluation.praise,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2B2D42),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
+
+                // Success Message
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF8ED),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: Color(0xFF6BCB77), size: 18),
+                      SizedBox(width: 6),
+                      Text(
+                        'Foto berhasil disimpan ke Galeri Tablet! 📸',
+                        style: TextStyle(color: Color(0xFF2C7436), fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // Share Button
+                if (widget.savedImagePath.isNotEmpty)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366), // WhatsApp / Share green
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      onPressed: () {
+                        ExportService.shareArtwork(
+                          filePath: widget.savedImagePath,
+                          childName: widget.childName,
+                          drawingTitle: widget.drawingTitle,
+                        );
+                      },
+                      icon: const Icon(Icons.share_rounded, size: 20),
+                      label: const Text('Bagikan ke WhatsApp / Keluarga 📲', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+
+                const SizedBox(height: 10),
+
                 Row(
                   children: [
                     Expanded(
@@ -119,7 +172,7 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                           backgroundColor: const Color(0xFF4D96FF),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                         ),
                         onPressed: () {
                           Navigator.pop(context);
@@ -133,10 +186,10 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6BCB77),
+                          backgroundColor: const Color(0xFFFF5E7E),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                         ),
                         onPressed: () {
                           Navigator.pop(context);
@@ -147,7 +200,7 @@ class _EvaluationDialogState extends State<EvaluationDialog> {
                       ),
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),

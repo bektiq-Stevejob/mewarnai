@@ -19,7 +19,12 @@ android/app/*.iml
 .DS_Store
 Thumbs.db
 
-# IDE / Gemini
-.vscode/
-.idea/
-.gemini/
+# Flutter & APKs
+*.apk
+build/
+mewarnai_app/build/
+.dart_tool/
+mewarnai_app/.dart_tool/
+mewarnai_app/.flutter-plugins
+mewarnai_app/.flutter-plugins-dependencies
+

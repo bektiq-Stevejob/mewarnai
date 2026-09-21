@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'models/drawing_item.dart';
 import 'services/storage_service.dart';
 import 'services/audio_service.dart';
+import 'screens/splash_screen.dart';
 import 'screens/catalog_screen.dart';
 import 'screens/studio_screen.dart';
 import 'screens/profile_screen.dart';
@@ -32,7 +33,7 @@ class MewarnaiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mewarnai Ceria',
+      title: 'Mewarnai Ceria - Achmad Family',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -46,7 +47,7 @@ class MewarnaiApp extends StatelessWidget {
   }
 }
 
-enum AppView { catalog, studio, profile, gallery }
+enum AppView { splash, catalog, studio, profile, gallery }
 
 class AppRoot extends StatefulWidget {
   final StorageService storage;
@@ -58,12 +59,20 @@ class AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<AppRoot> {
-  AppView _currentView = AppView.catalog;
+  AppView _currentView = AppView.splash;
   DrawingItem? _selectedDrawing;
 
   @override
   Widget build(BuildContext context) {
     switch (_currentView) {
+      case AppView.splash:
+        return SplashScreen(
+          storage: widget.storage,
+          onStart: () {
+            setState(() => _currentView = AppView.catalog);
+          },
+        );
+
       case AppView.catalog:
         return CatalogScreen(
           storage: widget.storage,

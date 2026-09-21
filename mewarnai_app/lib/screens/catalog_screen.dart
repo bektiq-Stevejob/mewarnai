@@ -76,7 +76,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
             onPressed: () async {
               final name = titleController.text.trim().isEmpty ? 'Gambar Sendiri' : titleController.text.trim();
               await widget.storage.addCustomDrawing(name, image.path);
-              Navigator.pop(ctx);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+              }
               _reloadCustomDrawings();
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -87,6 +89,75 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: const Text('Simpan & Tambahkan'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openBlankSketchpadDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Pilih Kertas Sketsa Bebas ✏️', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Mulai menggambar bebas dari nol tanpa garis panduan:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              title: const Text('Kertas Putih Bersih', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Kanvas polos untuk mewarnai bebas'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onSelectDrawing(DrawingItem.createBlankSketchpad('white'));
+              },
+            ),
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F5FF),
+                  border: Border.all(color: const Color(0xFF4D96FF)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(child: Text('▦', style: TextStyle(fontSize: 20, color: Color(0xFF4D96FF)))),
+              ),
+              title: const Text('Kertas Grid Kotak', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Garis panduan kotak untuk proporsi gambar'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onSelectDrawing(DrawingItem.createBlankSketchpad('grid'));
+              },
+            ),
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFE2D2),
+                  border: Border.all(color: const Color(0xFF8B5A2B)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              title: const Text('Kertas Kraft Vintage', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Tekstur kertas sketsa coklat klasik'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onSelectDrawing(DrawingItem.createBlankSketchpad('kraft'));
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -114,13 +185,26 @@ class _CatalogScreenState extends State<CatalogScreen> {
           children: [
             const Text('🎨', style: TextStyle(fontSize: 26)),
             const SizedBox(width: 8),
-            const Text(
-              'Mewarnai Ceria',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-                color: Color(0xFFFF5E7E),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Mewarnai Ceria',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Color(0xFFFF5E7E),
+                  ),
+                ),
+                Text(
+                  'Achmad Family Apps ✨ Ketiga Buah Hati',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4D96FF),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -160,24 +244,41 @@ class _CatalogScreenState extends State<CatalogScreen> {
       ),
       body: Column(
         children: [
-          // Category Scroll Bar + Import Button
+          // Toolbar: Add Image, Blank Sketchpad, and Category Chips
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             color: Colors.white,
             child: Row(
               children: [
+                // Add Image from Tablet Button
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6BCB77),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
                   onPressed: _pickAndAddCustomDrawing,
-                  icon: const Icon(Icons.add_photo_alternate_rounded, size: 18),
-                  label: const Text('Tambah Gambar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+                  label: const Text('Tambah Gambar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                const SizedBox(width: 6),
+
+                // Blank Sketchpad Button
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4D96FF),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  onPressed: _openBlankSketchpadDialog,
+                  icon: const Icon(Icons.edit_note_rounded, size: 18),
+                  label: const Text('Sketsa Bebas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
+
+                // Category Chips Scrollable
                 Expanded(
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -202,6 +303,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             labelStyle: TextStyle(
                               color: isSelected ? Colors.white : const Color(0xFF2B2D42),
                               fontWeight: FontWeight.bold,
+                              fontSize: 12,
                             ),
                             backgroundColor: const Color(0xFFF8F9FA),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -222,7 +324,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               controller: _searchController,
               onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
-                hintText: '🔍 Cari gambar (singa, dino, roket, mobil)...',
+                hintText: '🔍 Cari gambar (3d, robot, mobil, dino, sketsa)...',
                 fillColor: Colors.white,
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -261,10 +363,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFF1E9DF), width: 2),
+                            border: Border.all(
+                              color: item.category == '3d_expert'
+                                  ? const Color(0xFFFFD93D)
+                                  : const Color(0xFFF1E9DF),
+                              width: item.category == '3d_expert' ? 3 : 2,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
+                                color: Colors.black.withValues(alpha: 0.04),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -308,12 +415,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF3F4F6),
+                                  color: item.category == '3d_expert'
+                                      ? const Color(0xFFFFF9E6)
+                                      : const Color(0xFFF3F4F6),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   item.difficulty,
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: item.category == '3d_expert'
+                                        ? const Color(0xFFD97706)
+                                        : Colors.grey,
+                                  ),
                                 ),
                               ),
                             ],

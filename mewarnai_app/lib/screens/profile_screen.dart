@@ -114,7 +114,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 profile.age = int.tryParse(ageController.text) ?? profile.age;
                 profile.avatar = selectedAvatar;
                 await widget.storage.saveProfiles(_profiles);
-                Navigator.pop(ctx);
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                }
                 _loadProfiles();
               },
               child: const Text('Simpan'),
