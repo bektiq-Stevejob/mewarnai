@@ -134,6 +134,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF2B2D42), size: 28),
+          onPressed: widget.onProfileSelected,
+          tooltip: 'Kembali ke Katalog',
+        ),
         title: const Text(
           'Pilih Profil Anak ✨',
           style: TextStyle(color: Color(0xFF2B2D42), fontWeight: FontWeight.bold),
@@ -167,15 +172,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 240,
                     margin: const EdgeInsets.symmetric(horizontal: 12),
                     child: Card(
-                      elevation: isActive ? 6 : 2,
+                      elevation: isActive ? 8 : 2,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                         side: BorderSide(
-                          color: isActive ? const Color(0xFFFF5E7E) : Colors.transparent,
-                          width: 3,
+                          color: isActive ? const Color(0xFFFF5E7E) : const Color(0xFFFFCCD7),
+                          width: isActive ? 3.5 : 1.5,
                         ),
                       ),
                       color: Colors.white,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () async {
+                          await widget.storage.setActiveKidId(profile.id);
+                          widget.onProfileSelected();
+                        },
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
                         child: Column(
@@ -255,6 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             )
                           ],
                         ),
+                      ),
                       ),
                     ),
                   );

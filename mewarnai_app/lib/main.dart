@@ -64,6 +64,21 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _currentView == AppView.catalog || _currentView == AppView.splash,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentView == AppView.studio ||
+            _currentView == AppView.profile ||
+            _currentView == AppView.gallery) {
+          setState(() => _currentView = AppView.catalog);
+        }
+      },
+      child: _buildCurrentView(),
+    );
+  }
+
+  Widget _buildCurrentView() {
     switch (_currentView) {
       case AppView.splash:
         return SplashScreen(

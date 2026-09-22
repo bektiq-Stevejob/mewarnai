@@ -1,22 +1,48 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../models/drawing_item.dart';
 import '../models/profile.dart';
 import '../services/storage_service.dart';
 import '../services/audio_service.dart';
 import '../services/evaluation_service.dart';
 import '../services/export_service.dart';
+import '../services/svg_parser_service.dart';
 import '../widgets/evaluation_dialog.dart';
 
 enum DrawingTool {
+  bucket,
   crayon,
   pencil,
   rainbow,
   glitter,
-  bucket,
   eraser,
+}
+
+enum StudioActionType {
+  stroke,
+  bucketFill,
+}
+
+class StudioAction {
+  final StudioActionType type;
+  final DrawingStroke? stroke;
+  final int? partIndex;
+  final Color? oldColor;
+  final Color? newColor;
+
+  StudioAction.stroke(DrawingStroke this.stroke)
+      : type = StudioActionType.stroke,
+        partIndex = null,
+        oldColor = null,
+        newColor = null;
+
+  StudioAction.bucketFill({
+    required int this.partIndex,
+    required Color this.oldColor,
+    required Color this.newColor,
+  })  : type = StudioActionType.bucketFill,
+        stroke = null;
 }
 
 class DrawingStroke {
@@ -56,9 +82,13 @@ class _StudioScreenState extends State<StudioScreen> {
   final TransformationController _transformController = TransformationController();
 
   final List<DrawingStroke> _strokes = [];
-  final List<DrawingStroke> _redoStrokes = [];
+  final List<StudioAction> _undoHistory = [];
+  final List<StudioAction> _redoHistory = [];
 
-  DrawingTool _currentTool = DrawingTool.crayon;
+  List<SvgPart> _svgParts = [];
+  Color _canvasBackgroundColor = Colors.white;
+
+  DrawingTool _currentTool = DrawingTool.bucket;
   Color _selectedColor = const Color(0xFFFF3B30);
   double _strokeWidth = 14.0;
   double _rainbowHue = 0.0;
@@ -78,12 +108,29 @@ class _StudioScreenState extends State<StudioScreen> {
   @override
   void initState() {
     super.initState();
+    _initSvgParts();
+
     _transformController.addListener(() {
       final scale = _transformController.value.getMaxScaleOnAxis();
       if ((scale - _currentScale).abs() > 0.05) {
         setState(() => _currentScale = scale);
       }
     });
+
+    // Speak initial encouragement
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (widget.drawing.is3D) {
+        AudioService().speakPraise('Ini gambar 3D keren! Gunakan ember cat atau kuas sesukamu!');
+      } else if (widget.drawing.isSketch) {
+        AudioService().speakPraise('Model sketsa siap diwarnai! Ayo kreasikan warnamu!');
+      }
+    });
+  }
+
+  void _initSvgParts() {
+    if (!widget.drawing.isBlankSketchpad && !widget.drawing.isCustom) {
+      _svgParts = SvgParserService.parseSvg(widget.drawing.svgData);
+    }
   }
 
   @override
@@ -98,56 +145,154 @@ class _StudioScreenState extends State<StudioScreen> {
   }
 
   void _undo() {
-    if (_strokes.isNotEmpty) {
-      setState(() {
-        _redoStrokes.add(_strokes.removeLast());
-      });
-    }
+    if (_undoHistory.isEmpty) return;
+
+    setState(() {
+      final action = _undoHistory.removeLast();
+      _redoHistory.add(action);
+
+      if (action.type == StudioActionType.stroke) {
+        if (_strokes.isNotEmpty) {
+          _strokes.removeLast();
+        }
+      } else if (action.type == StudioActionType.bucketFill) {
+        final partIndex = action.partIndex!;
+        final part = _svgParts.firstWhere((p) => p.index == partIndex, orElse: () => _svgParts.first);
+        part.fillColor = action.oldColor!;
+      }
+    });
   }
 
   void _redo() {
-    if (_redoStrokes.isNotEmpty) {
-      setState(() {
-        _strokes.add(_redoStrokes.removeLast());
-      });
-    }
+    if (_redoHistory.isEmpty) return;
+
+    setState(() {
+      final action = _redoHistory.removeLast();
+      _undoHistory.add(action);
+
+      if (action.type == StudioActionType.stroke) {
+        _strokes.add(action.stroke!);
+      } else if (action.type == StudioActionType.bucketFill) {
+        final partIndex = action.partIndex!;
+        final part = _svgParts.firstWhere((p) => p.index == partIndex, orElse: () => _svgParts.first);
+        part.fillColor = action.newColor!;
+      }
+    });
   }
 
   void _clearCanvas() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Bersihkan Kanvas? 🗑️'),
-        content: const Text('Semua coretan warna akan dihapus dan kamu bisa mulai mewarnai lagi dari awal.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Text('🗑️', style: TextStyle(fontSize: 28)),
+            SizedBox(width: 8),
+            Text('Bersihkan Kanvas?'),
+          ],
+        ),
+        content: const Text('Semua warna dan coretan akan dihapus dan kamu bisa mulai mewarnai lagi dari awal.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Batal'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5E7E)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5E7E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               setState(() {
                 _strokes.clear();
-                _redoStrokes.clear();
+                _undoHistory.clear();
+                _redoHistory.clear();
+                _initSvgParts();
+                _canvasBackgroundColor = _getCanvasDefaultBackground();
               });
             },
-            child: const Text('Bersihkan', style: TextStyle(color: Colors.white)),
+            child: const Text('Bersihkan'),
           ),
         ],
       ),
     );
   }
 
+  Color _getCanvasDefaultBackground() {
+    if (widget.drawing.isBlankSketchpad) {
+      if (widget.drawing.paperType == 'kraft') return const Color(0xFFEFE2D2);
+      return Colors.white;
+    }
+    return Colors.white;
+  }
+
+  void _handleBucketTap(Offset localPos, Size canvasSize) {
+    if (_svgParts.isEmpty) {
+      // For blank sketchpad or raster custom drawing, bucket fill sets canvas background
+      setState(() {
+        _canvasBackgroundColor = _selectedColor;
+      });
+      AudioService().speakPraise('Clop! Warna latar berubah!');
+      return;
+    }
+
+    // Scale tap position from canvas size to SVG 500x500 viewBox
+    final double scaleX = 500.0 / canvasSize.width;
+    final double scaleY = 500.0 / canvasSize.height;
+    final svgPoint = Offset(localPos.dx * scaleX, localPos.dy * scaleY);
+
+    // Find the smallest / top-most matching fillable shape
+    SvgPart? hitPart;
+    double smallestArea = double.infinity;
+
+    for (final part in _svgParts.reversed) {
+      if (part.isFillable && part.path.contains(svgPoint)) {
+        final area = part.bounds.width * part.bounds.height;
+        if (area < smallestArea) {
+          smallestArea = area;
+          hitPart = part;
+        }
+      }
+    }
+
+    if (hitPart != null) {
+      final oldColor = hitPart.fillColor;
+      final newColor = _selectedColor;
+      setState(() {
+        hitPart!.fillColor = newColor;
+        _undoHistory.add(StudioAction.bucketFill(
+          partIndex: hitPart.index,
+          oldColor: oldColor,
+          newColor: newColor,
+        ));
+        _redoHistory.clear();
+      });
+      AudioService().speakPraise('Clop! Warna yang indah!');
+    } else {
+      // Tap was outside shapes (canvas background)
+      setState(() {
+        _canvasBackgroundColor = _selectedColor;
+      });
+      AudioService().speakPraise('Clop! Warna latar berubah!');
+    }
+  }
+
   Future<void> _handleSaveAndGrade() async {
     final activeKid = widget.storage.getActiveProfile();
 
-    final uniqueColors = _strokes.map((s) => s.color.toARGB32()).toSet().length;
+    final uniqueColors = {
+      ..._strokes.map((s) => s.color.toARGB32()),
+      ..._svgParts.map((p) => p.fillColor.toARGB32()),
+    }.where((c) => c != Colors.white.toARGB32() && c != Colors.transparent.toARGB32()).length;
+
+    final totalActions = _strokes.length + _svgParts.where((p) => p.fillColor != Colors.white).length;
+
     final evaluation = EvaluationService.evaluate(
-      strokeCount: _strokes.length,
-      colorCount: uniqueColors,
+      strokeCount: totalActions,
+      colorCount: max(1, uniqueColors),
       childName: activeKid.name,
     );
 
@@ -194,7 +339,7 @@ class _StudioScreenState extends State<StudioScreen> {
 
   Color _getCurrentStrokeColor() {
     if (_currentTool == DrawingTool.eraser) {
-      return Colors.white;
+      return _canvasBackgroundColor;
     } else if (_currentTool == DrawingTool.rainbow) {
       _rainbowHue = (_rainbowHue + 16) % 360;
       return HSVColor.fromAHSV(1.0, _rainbowHue, 0.95, 0.95).toColor();
@@ -206,11 +351,54 @@ class _StudioScreenState extends State<StudioScreen> {
 
   double _getEffectiveStrokeWidth() {
     if (_currentTool == DrawingTool.pencil) {
-      return max(4.0, _strokeWidth * 0.45);
-    } else if (_currentTool == DrawingTool.bucket) {
-      return 60.0; // Broad tap fill patch
+      return max(3.0, _strokeWidth * 0.4);
+    } else if (_currentTool == DrawingTool.glitter) {
+      return max(10.0, _strokeWidth * 1.2);
     }
     return _strokeWidth;
+  }
+
+  void _confirmExitToCatalog(BuildContext context) {
+    if (_strokes.isEmpty && _undoHistory.isEmpty) {
+      widget.onBackToCatalog();
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Text('🏠', style: TextStyle(fontSize: 26)),
+            SizedBox(width: 8),
+            Text('Kembali ke Menu?'),
+          ],
+        ),
+        content: const Text(
+          'Mau kembali ke menu katalog gambar? Kamu bisa simpan dulu atau langsung kembali.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Lanjut Mewarnai 🎨', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5E7E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              widget.onBackToCatalog();
+            },
+            child: const Text('Ya, Menu Utama 🏠'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -221,26 +409,60 @@ class _StudioScreenState extends State<StudioScreen> {
       backgroundColor: const Color(0xFFFFF8EE),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 2,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF2B2D42), size: 28),
-          onPressed: widget.onBackToCatalog,
-          tooltip: 'Kembali ke Katalog',
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.drawing.title,
-              style: const TextStyle(
-                color: Color(0xFF2B2D42),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+        elevation: 1,
+        leadingWidth: 130,
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5E7E),
+              foregroundColor: Colors.white,
+              elevation: 2,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
-            const Text(
-              'Achmad Family Apps ✨ Studio Mewarnai',
-              style: TextStyle(fontSize: 11, color: Color(0xFFFF5E7E), fontWeight: FontWeight.bold),
+            onPressed: () => _confirmExitToCatalog(context),
+            icon: const Text('🏠', style: TextStyle(fontSize: 18)),
+            label: const Text('Menu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.drawing.title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2B2D42),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0F4),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${activeKid.avatar} ${activeKid.name}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFFFF5E7E), fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '⭐ ${activeKid.totalStars}',
+                        style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -255,214 +477,238 @@ class _StudioScreenState extends State<StudioScreen> {
             ),
 
           IconButton(
-            icon: const Text('↩️', style: TextStyle(fontSize: 22)),
+            icon: const Text('↩️', style: TextStyle(fontSize: 20)),
             onPressed: _undo,
             tooltip: 'Undo',
           ),
           IconButton(
-            icon: const Text('↪️', style: TextStyle(fontSize: 22)),
+            icon: const Text('↪️', style: TextStyle(fontSize: 20)),
             onPressed: _redo,
             tooltip: 'Redo',
           ),
           IconButton(
-            icon: const Text('🗑️', style: TextStyle(fontSize: 22)),
+            icon: const Text('🗑️', style: TextStyle(fontSize: 20)),
             onPressed: _clearCanvas,
             tooltip: 'Bersihkan Kanvas',
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0, left: 6.0),
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6BCB77),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                elevation: 3,
-              ),
-              onPressed: _handleSaveAndGrade,
-              icon: const Text('⭐'),
-              label: const Text('Selesai & Nilai!', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+
+          // Selesai & Beri Bintang Button
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD93D),
+              foregroundColor: const Color(0xFF432800),
+              elevation: 4,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
-          )
+            onPressed: _handleSaveAndGrade,
+            icon: const Text('⭐', style: TextStyle(fontSize: 18)),
+            label: const Text('Selesai!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Row(
         children: [
-          // 1. Left Comprehensive Toolset Panel
+          // 1. Left Vertical Tool Selection Bar
           Container(
             width: 86,
+            color: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(right: BorderSide(color: Color(0xFFF1E9DF), width: 2)),
-            ),
             child: SingleChildScrollView(
               child: Column(
                 children: [
                   _buildToolBtn(
                     icon: '🪣',
                     label: 'Ember Cat',
+                    sublabel: 'Otomatis',
                     isSelected: _currentTool == DrawingTool.bucket,
-                    onTap: () => setState(() => _currentTool = DrawingTool.bucket),
+                    onTap: () {
+                      setState(() => _currentTool = DrawingTool.bucket);
+                      AudioService().speakPraise('Ember cat ajaib! Ketuk bidang mana saja untuk mewarnai!');
+                    },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildToolBtn(
                     icon: '🖍️',
                     label: 'Krayon',
+                    sublabel: 'Tebal',
                     isSelected: _currentTool == DrawingTool.crayon,
                     onTap: () => setState(() => _currentTool = DrawingTool.crayon),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildToolBtn(
                     icon: '✏️',
                     label: 'Pensil',
+                    sublabel: 'Detail',
                     isSelected: _currentTool == DrawingTool.pencil,
                     onTap: () => setState(() => _currentTool = DrawingTool.pencil),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildToolBtn(
                     icon: '🌈',
                     label: 'Pelangi',
+                    sublabel: 'Ajaib',
                     isSelected: _currentTool == DrawingTool.rainbow,
                     onTap: () => setState(() => _currentTool = DrawingTool.rainbow),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildToolBtn(
                     icon: '✨',
                     label: 'Glitter',
+                    sublabel: 'Bintang',
                     isSelected: _currentTool == DrawingTool.glitter,
                     onTap: () => setState(() => _currentTool = DrawingTool.glitter),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildToolBtn(
                     icon: '🧽',
-                    label: 'Penghapus',
+                    label: 'Hapus',
+                    sublabel: 'Bersih',
                     isSelected: _currentTool == DrawingTool.eraser,
                     onTap: () => setState(() => _currentTool = DrawingTool.eraser),
                   ),
-                  const Divider(height: 20),
+                  const Divider(height: 16),
                   const Text('Ukuran', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   _buildSizeBtn(8.0, 8.0),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   _buildSizeBtn(16.0, 14.0),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   _buildSizeBtn(28.0, 20.0),
                 ],
               ),
             ),
           ),
 
-          // 2. Center Interactive Canvas with Pinch-to-Zoom & Pan support
+          // 2. Center Interactive Canvas with Vector Fill & Freehand Strokes
           Expanded(
             child: Stack(
               children: [
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.all(10.0),
                     child: AspectRatio(
                       aspectRatio: 1.0,
                       child: InteractiveViewer(
                         transformationController: _transformController,
                         minScale: 1.0,
                         maxScale: 4.0,
-                        panEnabled: _currentTool == DrawingTool.bucket ? false : false, // pan via two fingers
+                        panEnabled: _currentScale > 1.05,
                         child: RepaintBoundary(
                           key: _repaintBoundaryKey,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: _getCanvasBackgroundColor(),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: const Color(0xFFFFD93D), width: 6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.12),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                )
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  // Paper texture background if blank sketchpad
-                                  if (widget.drawing.isBlankSketchpad)
-                                    CustomPaint(
-                                      painter: PaperGridPainter(paperType: widget.drawing.paperType),
-                                      size: Size.infinite,
-                                    ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-                                  // Gesture Painting Layer
-                                  GestureDetector(
-                                    onPanStart: (details) {
-                                      final localPos = details.localPosition;
-                                      final strokeColor = _getCurrentStrokeColor();
-                                      final width = _getEffectiveStrokeWidth();
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: _canvasBackgroundColor,
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: const Color(0xFFFFD93D), width: 6),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.12),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 8),
+                                    )
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      // Paper texture background if blank sketchpad
+                                      if (widget.drawing.isBlankSketchpad)
+                                        CustomPaint(
+                                          painter: PaperGridPainter(paperType: widget.drawing.paperType),
+                                          size: Size.infinite,
+                                        ),
 
-                                      setState(() {
-                                        _strokes.add(
-                                          DrawingStroke(
+                                      // Raster Custom User Image Layer (if imported image)
+                                      if (widget.drawing.isCustom)
+                                        Image.file(
+                                          File(widget.drawing.localCustomImagePath!),
+                                          fit: BoxFit.contain,
+                                        ),
+
+                                      // Master Interactive Canvas Painter (Fills + Strokes + Vector Outlines)
+                                      GestureDetector(
+                                        onTapUp: (details) {
+                                          if (_currentTool == DrawingTool.bucket) {
+                                            _handleBucketTap(details.localPosition, canvasSize);
+                                          }
+                                        },
+                                        onPanStart: (details) {
+                                          if (_currentTool == DrawingTool.bucket) {
+                                            _handleBucketTap(details.localPosition, canvasSize);
+                                            return;
+                                          }
+
+                                          final localPos = details.localPosition;
+                                          final strokeColor = _getCurrentStrokeColor();
+                                          final width = _getEffectiveStrokeWidth();
+
+                                          final stroke = DrawingStroke(
                                             points: [localPos],
                                             color: strokeColor,
                                             strokeWidth: width,
                                             tool: _currentTool,
+                                          );
+
+                                          setState(() {
+                                            _strokes.add(stroke);
+                                            _undoHistory.add(StudioAction.stroke(stroke));
+                                            _redoHistory.clear();
+                                          });
+                                        },
+                                        onPanUpdate: (details) {
+                                          if (_currentTool == DrawingTool.bucket) return;
+
+                                          setState(() {
+                                            if (_strokes.isNotEmpty) {
+                                              _strokes.last.points.add(details.localPosition);
+                                            }
+                                          });
+                                        },
+                                        child: CustomPaint(
+                                          painter: AdvancedCanvasPainter(
+                                            strokes: _strokes,
+                                            svgParts: _svgParts,
+                                            isCustomRaster: widget.drawing.isCustom,
                                           ),
-                                        );
-                                        _redoStrokes.clear();
-                                      });
-                                    },
-                                    onPanUpdate: (details) {
-                                      setState(() {
-                                        if (_strokes.isNotEmpty) {
-                                          _strokes.last.points.add(details.localPosition);
-                                        }
-                                      });
-                                    },
-                                    child: CustomPaint(
-                                      painter: AdvancedCanvasPainter(strokes: _strokes),
-                                      size: Size.infinite,
-                                    ),
-                                  ),
-
-                                  // SVG Vector Line-Art or Custom Image Outline on Top
-                                  if (!widget.drawing.isBlankSketchpad)
-                                    IgnorePointer(
-                                      child: widget.drawing.isCustom
-                                          ? Image.file(
-                                              File(widget.drawing.localCustomImagePath!),
-                                              fit: BoxFit.contain,
-                                            )
-                                          : SvgPicture.string(
-                                              widget.drawing.svgData,
-                                              fit: BoxFit.contain,
-                                            ),
-                                    ),
-
-                                  // Watermark Ribbon
-                                  Positioned(
-                                    bottom: 8,
-                                    right: 12,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: const Color(0xFFFFCCD7)),
-                                      ),
-                                      child: Text(
-                                        '${activeKid.avatar} ${activeKid.name} • Achmad Family Apps',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF6C757D),
+                                          size: Size.infinite,
                                         ),
                                       ),
-                                    ),
+
+                                      // Watermark Ribbon
+                                      Positioned(
+                                        bottom: 8,
+                                        right: 12,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.9),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: const Color(0xFFFFCCD7)),
+                                          ),
+                                          child: Text(
+                                            '${activeKid.avatar} ${activeKid.name} • Achmad Family Apps',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF6C757D),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -473,14 +719,14 @@ class _StudioScreenState extends State<StudioScreen> {
                 // 3. Floating Sketch Reference Guide Box (For Sketch / 3D models)
                 if (widget.drawing.sketchReferenceGuide != null && _showSketchReference)
                   Positioned(
-                    top: 16,
-                    left: 16,
+                    top: 14,
+                    left: 14,
                     child: Container(
-                      constraints: const Box320Constraint(),
-                      padding: const EdgeInsets.all(12),
+                      constraints: const BoxConstraints(maxWidth: 300),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFF4D96FF), width: 2),
                         boxShadow: [
                           BoxShadow(
@@ -497,15 +743,15 @@ class _StudioScreenState extends State<StudioScreen> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('💡 Contoh Sketsa & Warna', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2B2D42))),
-                              const SizedBox(width: 8),
+                              const Text('💡 Contoh Warna Sketsa', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF2B2D42))),
+                              const SizedBox(width: 6),
                               GestureDetector(
                                 onTap: () => setState(() => _showSketchReference = false),
-                                child: const Icon(Icons.close_rounded, size: 18, color: Colors.grey),
+                                child: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
                             widget.drawing.sketchReferenceGuide!,
                             style: const TextStyle(fontSize: 11, color: Color(0xFF4D96FF), fontWeight: FontWeight.w600),
@@ -517,81 +763,70 @@ class _StudioScreenState extends State<StudioScreen> {
 
                 if (widget.drawing.sketchReferenceGuide != null && !_showSketchReference)
                   Positioned(
-                    top: 16,
-                    left: 16,
+                    top: 14,
+                    left: 14,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFF4D96FF),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        elevation: 3,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: () => setState(() => _showSketchReference = true),
                       icon: const Text('💡'),
-                      label: const Text('Lihat Contekan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: const Text('Panduan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ),
               ],
             ),
           ),
 
-          // 4. Right 28-Color Palette
+          // 3. Right Vertical Color Palette Bar
           Container(
-            width: 105,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(left: BorderSide(color: Color(0xFFF1E9DF), width: 2)),
-            ),
-            child: Column(
-              children: [
-                const Text('Palet Warna 🎨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF2B2D42))),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: _colors.length,
-                    itemBuilder: (ctx, index) {
-                      final c = _colors[index];
-                      final isSelected = c == _selectedColor && _currentTool != DrawingTool.eraser;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedColor = c;
-                            if (_currentTool == DrawingTool.eraser) {
-                              _currentTool = DrawingTool.crayon;
-                            }
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected ? Colors.black : Colors.grey.shade300,
-                              width: isSelected ? 3.5 : 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: c.withValues(alpha: 0.4),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              )
-                            ],
+            width: 82,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const Text('Warna', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2B2D42))),
+                  const SizedBox(height: 6),
+                  ..._colors.map((color) {
+                    final isSelected = _selectedColor == color;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _selectedColor = color);
+                        AudioService().speakPraise('Keren!');
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        width: isSelected ? 44 : 36,
+                        height: isSelected ? 44 : 36,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFFFF5E7E) : const Color(0xFFE5E7EB),
+                            width: isSelected ? 3.5 : 1.5,
                           ),
-                          child: isSelected
-                              ? Icon(Icons.check, size: 16, color: c.computeLuminance() > 0.5 ? Colors.black : Colors.white)
-                              : null,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: isSelected ? 0.25 : 0.08),
+                              blurRadius: isSelected ? 8 : 3,
+                              offset: const Offset(0, 2),
+                            )
+                          ],
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+                        child: isSelected
+                            ? const Center(child: Icon(Icons.check_rounded, color: Colors.white, size: 20))
+                            : null,
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
           ),
         ],
@@ -599,46 +834,62 @@ class _StudioScreenState extends State<StudioScreen> {
     );
   }
 
-  Color _getCanvasBackgroundColor() {
-    if (widget.drawing.isBlankSketchpad && widget.drawing.paperType == 'kraft') {
-      return const Color(0xFFEFE2D2);
-    }
-    return Colors.white;
-  }
-
   Widget _buildToolBtn({
     required String icon,
     required String label,
+    required String sublabel,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 66,
-        height: 54,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFE5EC) : const Color(0xFFF8F9FA),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? const Color(0xFFFF5E7E) : const Color(0xFFEAE0D5),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 20)),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? const Color(0xFFFF5E7E) : Colors.grey,
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 72,
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFE5EC) : const Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? const Color(0xFFFF5E7E) : const Color(0xFFEAE0D5),
+              width: isSelected ? 2.5 : 1.0,
             ),
-          ],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFF5E7E).withValues(alpha: 0.2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? const Color(0xFFFF5E7E) : const Color(0xFF2B2D42),
+                ),
+              ),
+              Text(
+                sublabel,
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? const Color(0xFFFF5E7E) : Colors.grey,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -649,8 +900,8 @@ class _StudioScreenState extends State<StudioScreen> {
     return GestureDetector(
       onTap: () => setState(() => _strokeWidth = size),
       child: Container(
-        width: 36,
-        height: 36,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFFE5EC) : const Color(0xFFF8F9FA),
           shape: BoxShape.circle,
@@ -674,17 +925,37 @@ class _StudioScreenState extends State<StudioScreen> {
   }
 }
 
-class Box320Constraint extends BoxConstraints {
-  const Box320Constraint() : super(maxWidth: 320);
-}
-
 class AdvancedCanvasPainter extends CustomPainter {
   final List<DrawingStroke> strokes;
+  final List<SvgPart> svgParts;
+  final bool isCustomRaster;
 
-  AdvancedCanvasPainter({required this.strokes});
+  AdvancedCanvasPainter({
+    required this.strokes,
+    required this.svgParts,
+    required this.isCustomRaster,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final double scale = size.width / 500.0;
+
+    // Layer 1: Draw Fills for SVG parts (Colored by Ember Cat)
+    if (svgParts.isNotEmpty && !isCustomRaster) {
+      canvas.save();
+      canvas.scale(scale, scale);
+
+      final fillPaint = Paint()..style = PaintingStyle.fill;
+      for (final part in svgParts) {
+        if (part.isFillable && part.fillColor != Colors.transparent) {
+          fillPaint.color = part.fillColor;
+          canvas.drawPath(part.path, fillPaint);
+        }
+      }
+      canvas.restore();
+    }
+
+    // Layer 2: Draw User Freehand Strokes (Crayon, Pencil, Rainbow, Eraser)
     for (final stroke in strokes) {
       if (stroke.tool == DrawingTool.glitter) {
         _drawGlitterStars(canvas, stroke);
@@ -692,27 +963,37 @@ class AdvancedCanvasPainter extends CustomPainter {
       }
 
       final paint = Paint()
-        ..color = stroke.tool == DrawingTool.eraser ? Colors.white : stroke.color
+        ..color = stroke.color
         ..strokeCap = stroke.tool == DrawingTool.pencil ? StrokeCap.square : StrokeCap.round
         ..strokeJoin = stroke.tool == DrawingTool.pencil ? StrokeJoin.miter : StrokeJoin.round
         ..strokeWidth = stroke.strokeWidth
         ..style = PaintingStyle.stroke;
 
-      if (stroke.tool == DrawingTool.bucket) {
-        // Broad color fill patch
-        final fillPaint = Paint()
-          ..color = stroke.color
-          ..style = PaintingStyle.fill;
-        for (final p in stroke.points) {
-          canvas.drawCircle(p, stroke.strokeWidth, fillPaint);
-        }
-      } else if (stroke.points.length == 1) {
+      if (stroke.points.length == 1) {
         canvas.drawCircle(stroke.points.first, stroke.strokeWidth / 2, paint..style = PaintingStyle.fill);
       } else {
         for (int i = 0; i < stroke.points.length - 1; i++) {
           canvas.drawLine(stroke.points[i], stroke.points[i + 1], paint);
         }
       }
+    }
+
+    // Layer 3: Draw Crisp Black Outlines of SVG Shapes ON TOP
+    if (svgParts.isNotEmpty && !isCustomRaster) {
+      canvas.save();
+      canvas.scale(scale, scale);
+
+      final strokePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      for (final part in svgParts) {
+        strokePaint.color = part.strokeColor;
+        strokePaint.strokeWidth = part.strokeWidth;
+        canvas.drawPath(part.path, strokePaint);
+      }
+      canvas.restore();
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/drawing_item.dart';
 import '../services/storage_service.dart';
+import '../services/audio_service.dart';
 
 class CatalogScreen extends StatefulWidget {
   final StorageService storage;
@@ -244,6 +245,120 @@ class _CatalogScreenState extends State<CatalogScreen> {
       ),
       body: Column(
         children: [
+          // 1. Imaginative Quick Sibling Profile Switcher Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: const Color(0xFFFFCCD7).withValues(alpha: 0.6))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0F4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('👶', style: TextStyle(fontSize: 14)),
+                      SizedBox(width: 4),
+                      Text('Anak:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFFF5E7E))),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: widget.storage.getProfiles().map((p) {
+                        final isSelected = p.id == activeKid.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () async {
+                                await widget.storage.setActiveKidId(p.id);
+                                AudioService().speakPraise('Sekarang giliran ${p.name}! Ayo kita mewarnai!');
+                                setState(() {});
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFFFF5E7E) : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFFFF5E7E) : const Color(0xFFE5E7EB),
+                                    width: isSelected ? 2.0 : 1.2,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(0xFFFF5E7E).withValues(alpha: 0.3),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(p.avatar, style: const TextStyle(fontSize: 18)),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      p.name,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : const Color(0xFF2B2D42),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? Colors.white.withValues(alpha: 0.25) : const Color(0xFFFFE8A3),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '⭐ ${p.totalStars}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isSelected ? Colors.white : const Color(0xFF8A5A00),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF4D96FF),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  onPressed: widget.onOpenProfile,
+                  icon: const Icon(Icons.tune_rounded, size: 16),
+                  label: const Text('Atur Profil', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+
           // Toolbar: Add Image, Blank Sketchpad, and Category Chips
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
